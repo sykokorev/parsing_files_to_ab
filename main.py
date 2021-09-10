@@ -8,7 +8,6 @@ from PySide6.QtUiTools import QUiLoader
 from PySide6.QtWidgets import *
 from PySide6.QtGui import *
 
-
 import functions as fnc
 
 
@@ -41,6 +40,14 @@ class ParseTxt(object):
         self.main_menu = None
         self.file_source = None
         self.text_browser = None
+        self.text = None
+        self.variables = {}
+
+    def _widgets_initial_states(self):
+
+        for widget in self.widgets:
+            if type(widget) == QDockWidget:
+                widget.hide()
 
     def _create_action(self):
 
@@ -49,12 +56,20 @@ class ParseTxt(object):
 
         self.open_action.triggered.connect(self.open_file)
 
+    def _get_file_data(self):
+
+        file_source = os.path.join(self.file_source[0], self.file_source[1])
+        with open(file_source, 'r') as f:
+            return f.read()
+
     def get_widgets(self):
         w = []
         for child in self.obj.children():
             if type(child) != QObject:
                 w.append(child)
         self.widgets = tuple(w)
+
+        self._widgets_initial_states()
 
         # for widget in self.widgets:
         #     print(f'{widget}: {widget.objectName()}')
@@ -68,10 +83,10 @@ class ParseTxt(object):
 
     def open_file(self):
         file_ = QFileDialog.getOpenFileName(self.obj, "Select File to Open",
-                                               "\\", "Text file (*.txt);;"
-                                                     "Csv file (*.csv);;"
-                                                     "Data file (*.dat);;"
-                                                     "Results file (*.res *.rez)")
+                                            "\\", "Text file (*.txt);;"
+                                                  "Csv file (*.csv);;"
+                                                  "Data file (*.dat);;"
+                                                  "Results file (*.res *.rez)")
 
         self.file_source = (
             os.path.split(file_[0])[0],
@@ -83,16 +98,35 @@ class ParseTxt(object):
 
         for widget in self.widgets:
             if type(widget) == QDockWidget:
+                widget.show()
                 self.text_browser = fnc.add_widget(widget, QTextBrowser, 'textBrowser')
                 if self.text_browser:
-                    print('Yes')
+                    self.text_browser.clear()
                     self.text_browser.setDocument(q_text_document)
+                    self.text_browser.setContextMenuPolicy(Qt.CustomContextMenu)
+                    self.text_browser.customContextMenuRequested.connect(self.add_variable)
 
-    def _get_file_data(self):
+    def add_variable(self, pos):
 
-        file_source =os.path.join(self.file_source[0], self.file_source[1])
-        with open(file_source, 'r') as f:
-            return f.read()
+        menu = QMenu(self.text_browser)
+        sender = self.text_browser.sender()
+        add_var = menu.addAction("Add Variable...")
+        action = menu.exec(QCursor.pos())
+
+        if action == add_var:
+            msg = QInputDialog()
+            msg.setLabelText("Input variable name")
+            msg.setOkButtonText("Add")
+            msg.setWindowTitle("Add variable")
+            if msg.exec():
+                text = self.text_browser.textCursor().selectedText()
+                text = text.strip()
+                try:
+                    text = float(text)
+                except (ValueError, TypeError):
+                    pass
+                self.variables[msg.textValue()] = text
+        print(self.variables)
 
 
 if __name__ == "__main__":
