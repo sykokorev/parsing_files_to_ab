@@ -73,7 +73,7 @@ class ParseTxt(object):
         try:
             with open(file_source, 'r') as f:
                 return f.read()
-        except FileNotFoundError:
+        except (FileNotFoundError, PermissionError):
             return False
 
     def get_widgets(self):
@@ -128,7 +128,6 @@ class ParseTxt(object):
                         self.text_browser.setDocument(q_text_document)
                         self.text_browser.setContextMenuPolicy(
                             Qt.CustomContextMenu)
-                        self.text_browser.setSearchPaths(['1', '2'])
                         self.text_browser.customContextMenuRequested.\
                             connect(self.add_variable)
 
