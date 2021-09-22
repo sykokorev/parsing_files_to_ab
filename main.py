@@ -11,6 +11,17 @@ from PySide6.QtGui import *
 import functions as fnc
 
 
+def get_text(obj):
+    text = obj.textCursor().selectedText()
+    text = text.strip()
+    return text
+
+
+def change_text_background_color(obj, color=Qt.yellow):
+    color = QColor(color)
+    obj.setTextBackgroundColor(color)
+
+
 class LoadParserForm(QMainWindow):
 
     def __init__(self, ui_file, parent=None):
@@ -33,14 +44,12 @@ class LoadParserForm(QMainWindow):
 class ParseTxt(object):
 
     def __init__(self, obj=None, parent=None):
-        # super(ParseTxt, self).__init__(parent)
 
         self.obj = obj
         self.widgets = tuple()
         self.main_menu = None
         self.file_source = None
         self.text_browser = None
-        self.text = None
         self.variables = {}
 
     def _widgets_initial_states(self):
@@ -52,15 +61,20 @@ class ParseTxt(object):
     def _create_action(self):
 
         self.open_action = self.main_menu.addAction('Open File ...')
-        self.close_file = self.main_menu.addAction('Close File ...')
-
         self.open_action.triggered.connect(self.open_file)
+
+        self.close_action = self.main_menu.addAction('Close File ...')
+        self.close_action.triggered.connect(self.close_file)
 
     def _get_file_data(self):
 
         file_source = os.path.join(self.file_source[0], self.file_source[1])
-        with open(file_source, 'r') as f:
-            return f.read()
+
+        try:
+            with open(file_source, 'r') as f:
+                return f.read()
+        except FileNotFoundError:
+            return False
 
     def get_widgets(self):
         w = []
@@ -68,6 +82,14 @@ class ParseTxt(object):
             if type(child) != QObject:
                 w.append(child)
         self.widgets = tuple(w)
+
+        for widget in self.widgets:
+            if type(widget) == QDockWidget and \
+                    widget.objectName() == 'dockWidgetText':
+                self.text_browser = fnc.add_widget(
+                    widget,
+                    QTextBrowser, 'textBrowser'
+                )
 
         self._widgets_initial_states()
 
@@ -94,38 +116,67 @@ class ParseTxt(object):
         )
 
         file_data = self._get_file_data()
-        q_text_document = QTextDocument(file_data)
+
+        if file_data:
+            q_text_document = QTextDocument(file_data)
+            for widget in self.widgets:
+                if type(widget) == QDockWidget and \
+                        widget.objectName() == 'dockWidgetText':
+                    widget.show()
+                    if self.text_browser:
+                        self.text_browser.clear()
+                        self.text_browser.setDocument(q_text_document)
+                        self.text_browser.setContextMenuPolicy(
+                            Qt.CustomContextMenu)
+                        self.text_browser.setSearchPaths(['1', '2'])
+                        self.text_browser.customContextMenuRequested.\
+                            connect(self.add_variable)
+
+    def close_file(self):
 
         for widget in self.widgets:
             if type(widget) == QDockWidget:
-                widget.show()
-                self.text_browser = fnc.add_widget(widget, QTextBrowser, 'textBrowser')
+                widget.hide()
                 if self.text_browser:
                     self.text_browser.clear()
-                    self.text_browser.setDocument(q_text_document)
-                    self.text_browser.setContextMenuPolicy(Qt.CustomContextMenu)
-                    self.text_browser.customContextMenuRequested.connect(self.add_variable)
 
-    def add_variable(self, pos):
+    def add_variable(self):
 
         menu = QMenu(self.text_browser)
-        sender = self.text_browser.sender()
-        add_var = menu.addAction("Add Variable...")
+        add_num_var = menu.addAction("Add numerical variable...")
+        add_str_var = menu.addAction("Add string variable...")
         action = menu.exec(QCursor.pos())
 
-        if action == add_var:
-            msg = QInputDialog()
-            msg.setLabelText("Input variable name")
-            msg.setOkButtonText("Add")
-            msg.setWindowTitle("Add variable")
+        msg = QInputDialog()
+        msg.setLabelText("Input variable name")
+        msg.setOkButtonText("Add")
+        msg.setWindowTitle("Add variable")
+
+        if action == add_num_var:
             if msg.exec():
-                text = self.text_browser.textCursor().selectedText()
-                text = text.strip()
+                text = get_text(self.text_browser)
                 try:
                     text = float(text)
+                    self.variables[msg.textValue()] = text
+                    change_text_background_color(self.text_browser)
                 except (ValueError, TypeError):
-                    pass
+                    err_title = 'TypeError'
+                    err_text = 'Unavailable data type for numerical data. ' \
+                               'Do you want ddd variable as a string value?'
+                    err_msg = QMessageBox().question(self.text_browser,
+                                                     err_title, err_text,
+                                                     QMessageBox.StandardButton.Ok,
+                                                     QMessageBox.StandardButton.Cancel)
+                    if err_msg == 1024:
+                        change_text_background_color(self.text_browser, Qt.magenta)
+                        self.variables[msg.textValue()] = text
+
+        elif action == add_str_var:
+            if msg.exec():
+                text = get_text(self.text_browser)
+                change_text_background_color(self.text_browser, Qt.magenta)
                 self.variables[msg.textValue()] = text
+
         print(self.variables)
 
 
